@@ -1,0 +1,26 @@
+server:
+  host: localhost
+  port: 8080
+  mode: development
+
+database:
+  driver: sqlite3
+  max_connections: 25
+  max_idle_connections: 10
+
+auth:
+  jwt_secret: xxx
+  token_expiry: 24h
+
+storage:
+  base_path: data
+  versions: versions
+  thumbnails: thumbs
+  logs: logs
+  database: prod.db
+  max_file_size: 10MB
+
+thumbnails:
+  enable_service: true
+  max_width: 100 # px
+  max_height: 100 # px

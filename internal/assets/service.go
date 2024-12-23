@@ -1,4 +1,4 @@
-package files
+package assets
 
 // import (
 // 	"github.com/js-codegamer/fs-sync/internal/models"

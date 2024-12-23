@@ -2,36 +2,52 @@ package logger
 
 import (
 	"os"
+	"path/filepath"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
 var (
-	Log   *zap.Logger
-	Sugar *zap.SugaredLogger
+	Logger *zap.Logger
+	Sugar  *zap.SugaredLogger
 )
 
-func InitLogger() {
-	config := zap.NewProductionEncoderConfig()
-	config.EncodeTime = zapcore.ISO8601TimeEncoder
+func createLogger(fname string) *zap.Logger {
+	encoderConfig := zap.NewProductionEncoderConfig()
+	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 
-	fileEncoder := zapcore.NewJSONEncoder(config)
-	consoleEncoder := zapcore.NewConsoleEncoder(config)
+	fileEncoder := zapcore.NewJSONEncoder(encoderConfig)
 
-	file, _ := os.OpenFile("app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	writer := zapcore.AddSync(file)
+	encoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+	consoleEncoder := zapcore.NewConsoleEncoder(encoderConfig)
+
+	err := os.MkdirAll(filepath.Dir(fname), 0750)
+	if err != nil {
+		panic("error creating logfile")
+	}
+	file, err := os.OpenFile(fname, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		panic("error creating logfile")
+	}
 
 	core := zapcore.NewTee(
-		zapcore.NewCore(fileEncoder, writer, zapcore.InfoLevel),
+		zapcore.NewCore(fileEncoder, zapcore.AddSync(file), zapcore.InfoLevel),
 		zapcore.NewCore(consoleEncoder, zapcore.AddSync(os.Stdout), zapcore.DebugLevel),
 	)
 
-	Log = zap.New(core, zap.AddCaller())
-	Sugar = Log.Sugar()
+	return zap.New(core, zap.AddCaller())
+}
+
+func InitLogger(logPath string) {
+	Logger = createLogger(logPath)
+	Sugar = Logger.Sugar()
 }
 
 func Close() {
-	Log.Sync()
+	Logger.Sync()
+	Sugar.Sync()
+
+	Logger.Sync()
 	Sugar.Sync()
 }
