@@ -1,10 +1,68 @@
 #!/bin/bash
 
-command clear
+setup_tests() {
+  rm data-testing -rf
+  command clear
+  f1=$(mktemp)
+  echo "1
+2
+3
+4" >$f1
+  f2=$(mktemp)
+  echo "5
+6
+7
+8
+9
+10
+11
+12" >$f2
+  config=$(mktemp)
+  echo 'server:
+  host: localhost
+  port: 9999
+  mode: development
 
-base_url='http://localhost:8080'
+database:
+  driver: sqlite3
+  max_connections: 25
+  max_idle_connections: 10
 
-# create 10 dummy users
+auth:
+  jwt_secret: xxx
+  token_expiry: 24h
+
+storage:
+  base_path: data-testing
+  versions: versions
+  thumbnails: thumbs
+  logs: logs
+  database: tests.db
+  max_file_size: 10MB
+
+thumbnails:
+  enable_service: true
+  max_width: 100  # px
+  max_height: 100 # px
+' >$config
+  set -m
+  scripts/run.sh --config $config &
+  serv_pid=$!
+  set +m
+}
+
+cleanup_tests() {
+  rm $f1 $f2 $config
+  # -$serv_pid is not a mistake it is used to kill proc gp
+  kill -2 -$serv_pid
+  waitpid $serv_pid
+  exit
+}
+
+base_url='http://localhost:9999'
+
+setup_tests
+trap "cleanup_tests" INT TERM
 
 name='js-testing'
 email='test@example.com'
@@ -20,9 +78,9 @@ echo $data
 # ---
 
 # SIGNUP
-sqlite3 data/prod.db "DELETE FROM users WHERE username = '$name';"
-if [ -d "data/$name" ]; then
-  rm -r data/$name
+sqlite3 data-testing/tests.db "DELETE FROM users WHERE username = '$name';"
+if [ -d "data-testing/$name" ]; then
+  rm -r data-testing/$name
 fi
 data=$(curl ${base_url}/register -Ls -XPOST -d \
   "{
@@ -102,12 +160,6 @@ echo UPDATE EMAIL CHECK 2\>\> $data
 # ---
 
 # CREATE TEMP FILE FOR UPLOAD
-f1=$(mktemp)
-echo file-1 contents:
-echo "1
-2
-3
-4" | tee $f1
 data=$(
   curl ${base_url}/asset -Ls -XPOST \
     -H "Authorization: Bearer ${token}" \
@@ -133,16 +185,7 @@ data=$(
 )
 echo DOWNLOAD FILE\>\> $data
 
-f2=$(mktemp)
-echo file-2 contents:
-echo "5
-6
-7
-8
-9
-10
-11
-12" | tee $f2
+# create version 2
 data=$(
   curl ${base_url}${upload_url} -Ls -XPUT \
     -H "Authorization: Bearer ${token}" \
@@ -163,9 +206,11 @@ data=$(
 )
 echo DOWNLOAD FILE\>\> $data
 
-# # TEST ADMIN STUFF
-# sqlite3 db.sqlite3 "UPDATE users SET role = 'ADMIN' WHERE email = '$email';"
-# data=$(curl ${base_url}/admin/users -Ls \
-#   -H "Authorization: Bearer ${token}")
-# echo ADMIN GET ALL USERS\>\> $data
-# # ---
+#  delete file and if all versions are deleted
+data=$(
+  curl ${base_url}${upload_url} -Ls -XDELETE \
+    -H "Authorization: Bearer ${token}"
+)
+echo DELETE FILE\>\> $data
+
+cleanup_tests

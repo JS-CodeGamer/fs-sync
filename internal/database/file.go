@@ -121,7 +121,7 @@ func FindLatestFileByAssetID(assetID string) (models.File, error) {
 	return file, nil
 }
 
-func FindFilesByAssetID(assetID string) ([]models.File, error) {
+func FindAllFilesByAssetID(assetID string) ([]models.File, error) {
 	query := `
 	SELECT id, size, version, path, asset, mime_type
 		FROM files

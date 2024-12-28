@@ -127,8 +127,17 @@ func MetadataUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := utils.MoveToVersionStorage(file); err != nil {
-		logger.Sugar.Errorw("error moving old version", "error", err)
+	if file.Path == "" {
+		http.Error(w, "File not uploaded", http.StatusBadRequest)
+		return
+	}
+
+	versionPath := utils.GetVersionPath(file)
+	os.MkdirAll(filepath.Dir(versionPath), 0750)
+	os.Rename(file.Path, versionPath)
+	file.Path = versionPath
+	if err := database.UpdateFile(&file, nil); err != nil {
+		logger.Sugar.Errorw("error updating db file", "error", err)
 		http.Error(w, "Error creating new version", http.StatusInternalServerError)
 		return
 	}
@@ -146,7 +155,7 @@ func MetadataUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode(map[string]string{
 		"message":    "success",
-		"upload_url": fmt.Sprintf("/upload/%s", newFile.ID),
+		"upload_url": fmt.Sprintf("/upload/%s", newFile.AssetID),
 	})
 }
 
@@ -234,7 +243,7 @@ func DeleteHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		files, err := database.FindFilesByAssetID(asset.ID)
+		files, err := database.FindAllFilesByAssetID(asset.ID)
 		if err != nil {
 			logger.Sugar.Errorw("error finding files for asset", "error", err)
 			http.Error(w, "Error deleting resource", http.StatusInternalServerError)

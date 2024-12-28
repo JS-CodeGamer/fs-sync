@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -25,20 +24,6 @@ func DestroyRootDir(user models.User) error {
 	return os.RemoveAll(base)
 }
 
-func MoveToVersionStorage(file models.File) error {
-	if file.Path == "" {
-		return fmt.Errorf("File does not exist")
-	}
-
-	versionBase := filepath.Join(config.GetConfig().Storage.BasePath, config.GetConfig().Storage.VersionPath)
-
-	assetDir := filepath.Join(versionBase, file.AssetID)
-
-	if _, err := os.Stat(assetDir); err != nil && os.IsNotExist(err) {
-		os.MkdirAll(assetDir, 0750)
-	}
-
-	err := os.Rename(file.Path, filepath.Join(assetDir, strconv.FormatInt(file.Version, 10)))
-
-	return err
+func GetVersionPath(file models.File) string {
+	return filepath.Join(config.GetConfig().Storage.BasePath, config.GetConfig().Storage.VersionPath, file.AssetID, strconv.FormatInt(file.Version, 10))
 }

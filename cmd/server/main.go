@@ -20,8 +20,9 @@ func main() {
 	}
 	cfg := config.GetConfig()
 
+	logFName := fmt.Sprintf("%s.log", time.Now().Format(time.DateOnly))
 	logger.InitLogger(
-		filepath.Join(cfg.Storage.BasePath, cfg.Storage.LogsPath, fmt.Sprintf("%s.log", time.Now().Format(time.RFC3339))),
+		filepath.Join(cfg.Storage.BasePath, cfg.Storage.LogsPath, logFName),
 	)
 	defer logger.Close()
 
