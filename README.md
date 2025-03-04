@@ -14,28 +14,22 @@ A Google Drive-like application built using Golang for the backend with SQLite a
 project-root/
 ├── cmd/
 │   └── server/               # Entry point for the application
-│       └── main.go
 ├── config/                   # Configuration files and utilities
-│   └── config.go
 ├── internal/                 # Core application logic
 │   ├── auth/                 # Authentication logic
-│   │   ├── auth.go
-│   │   ├── middleware.go
-│   │   └── jwt.go
-│   ├── file/                 # File management logic
-│   │   ├── file.go
-│   │   └── upload.go
-│   └── user/                 # User management logic
-│       ├── user.go
-│       └── profile.go
+│   ├── assets/               # Asset (file/folder) management logic
+│   ├── database/             # Database management logic
+│   ├── models/               # Internal modeling logic
+│   └── routes/               # API routing logic
 ├── pkg/                      # Shared utility packages
-│   ├── database/
-│   │   └── sqlite.go
-│   └── logger/
-│       └── logger.go
+│   ├── jwt/
+│   ├── logger/
+│   ├── password/
+│   └── validator/
 ├── web/                      # Static files and frontend assets
-│   ├── index.html
+│   ├── index.html            ## CURRENTLY UNUSED ( FOR COMPILED FRONTEND )
 │   └── app.js
+├── scripts/                  # Development / Management Scripts I Use
 ├── .env                      # Environment variables
 ├── go.mod                    # Go module file
 ├── go.sum                    # Dependencies checksum
@@ -66,12 +60,20 @@ go run cmd/server/main.go
 ```
 
 ## API Endpoints
+- **Availability**
+  - `GET /ping`
 - **Authentication**:
-  - `POST /login`
   - `POST /register`
+  - `POST /login`
+  - **Profile Management**
+    - `GET /me`
+    - `POST /me`
+    - `DELETE /me`
 - **File Management**:
-  - `POST /upload`
-  - `GET /files`
+  - `POST /a`                   -- Create file object / (upload) metadata
+  - `GET /a/:fileID`            -- Get file (only works if you have permissions)
+  - `PUT /a/:fileID`            -- Update file object / metadata
+  - `PATCH /a/:fileID`          -- Upload file binary
   - `DELETE /files/:id`
 
 ## License

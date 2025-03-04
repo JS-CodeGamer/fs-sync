@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/docker/go-units"
 	"gopkg.in/yaml.v3"
@@ -26,8 +27,9 @@ type Config struct {
 	} `yaml:"database"`
 
 	Auth struct {
-		JWTSecret   string `yaml:"jwt_secret"`
-		TokenExpiry string `yaml:"token_expiry"`
+		JWTSecret          string        `yaml:"jwt_secret"`
+		AccessTokenExpiry  time.Duration `yaml:"access_token_expiry"`
+		RefreshTokenExpiry time.Duration `yaml:"refresh_token_expiry"`
 	} `yaml:"auth"`
 
 	Storage struct {

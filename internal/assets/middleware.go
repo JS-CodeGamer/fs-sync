@@ -28,7 +28,7 @@ func AssetCtx(next http.Handler) http.Handler {
 
 		ctx := context.WithValue(r.Context(), "asset", asset)
 
-		if !asset.IsDir {
+		if asset.Type != models.FolderType {
 			file, err := database.FindLatestFileByAssetID(asset.ID)
 			if err != nil {
 				http.Error(w, "Resource not found", http.StatusNotFound)

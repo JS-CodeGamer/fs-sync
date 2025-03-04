@@ -10,7 +10,8 @@ database:
 
 auth:
   jwt_secret: xxx
-  token_expiry: 24h
+  access_token_expiry: 24h
+  refresh_token_expiry: 24h
 
 storage:
   base_path: data

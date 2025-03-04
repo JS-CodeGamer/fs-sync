@@ -13,7 +13,7 @@ func CreateAsset(asset *models.Asset, txn *sql.Tx) error {
 
 	query := `
 	INSERT INTO assets
-			(id, owner, name, parent, is_dir, path)
+			(id, owner, name, parent, type, path)
 		VALUES
 			(?, ?, ?, ?, ?, ?)
 	`
@@ -25,7 +25,7 @@ func CreateAsset(asset *models.Asset, txn *sql.Tx) error {
 			asset.OwnerID,
 			asset.Name,
 			asset.ParentID,
-			asset.IsDir,
+			asset.Type,
 			asset.Path,
 		)
 	} else {
@@ -34,7 +34,7 @@ func CreateAsset(asset *models.Asset, txn *sql.Tx) error {
 			asset.OwnerID,
 			asset.Name,
 			asset.ParentID,
-			asset.IsDir,
+			asset.Type,
 			asset.Path,
 		)
 	}
@@ -46,9 +46,36 @@ func CreateAsset(asset *models.Asset, txn *sql.Tx) error {
 	return err
 }
 
+func UpdateAsset(asset *models.Asset, txn *sql.Tx) error {
+	query := `
+	UPDATE assets
+		SET
+			name = ?, path = ?
+		WHERE
+			id = ?
+	`
+
+	var err error
+	if txn == nil {
+		_, err = db.Exec(query,
+			asset.Name,
+			asset.Path,
+			asset.ID,
+		)
+	} else {
+		_, err = txn.Exec(query,
+			asset.Name,
+			asset.Path,
+			asset.ID,
+		)
+	}
+
+	return err
+}
+
 func FindAssetByID(assetID string) (models.Asset, error) {
 	query := `
-	SELECT id, owner, name, parent, is_public, is_dir, path, created_at, updated_at
+	SELECT id, owner, name, parent, is_public, type, path, created_at, updated_at
 		FROM assets
 		WHERE id = ?
 	`
@@ -60,7 +87,7 @@ func FindAssetByID(assetID string) (models.Asset, error) {
 		&asset.Name,
 		&asset.ParentID,
 		&asset.IsPublic,
-		&asset.IsDir,
+		&asset.Type,
 		&asset.Path,
 		&asset.CreatedAt,
 		&asset.UpdatedAt,
@@ -92,7 +119,7 @@ func DeleteAsset(asset models.Asset, txn *sql.Tx) error {
 
 func GetDirContents(asset models.Asset) ([]models.Asset, error) {
 	query := `
-	SELECT id, owner, name, parent, is_public, is_dir, path, created_at, updated_at
+	SELECT id, owner, name, parent, is_public, type, path, created_at, updated_at
 		FROM assets
 		WHERE parent = ?`
 
@@ -111,7 +138,7 @@ func GetDirContents(asset models.Asset) ([]models.Asset, error) {
 			&asset.Name,
 			&asset.ParentID,
 			&asset.IsPublic,
-			&asset.IsDir,
+			&asset.Type,
 			&asset.Path,
 			&asset.CreatedAt,
 			&asset.UpdatedAt,

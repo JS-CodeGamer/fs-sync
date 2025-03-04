@@ -6,6 +6,7 @@ import (
 
 	"github.com/js-codegamer/fs-sync/internal/database"
 	"github.com/js-codegamer/fs-sync/internal/models"
+	"github.com/js-codegamer/fs-sync/internal/utils"
 	"github.com/js-codegamer/fs-sync/pkg/jwt"
 	"github.com/js-codegamer/fs-sync/pkg/logger"
 	"github.com/js-codegamer/fs-sync/pkg/password"
@@ -49,14 +50,14 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := jwt.GenerateToken(user.Username)
+	tokens, err := jwt.GenerateTokenPair(user.Username, user.Email)
 	if err != nil {
 		logger.Sugar.Errorw("error creating token", "error", err)
 		http.Error(w, "Token generation failed", http.StatusInternalServerError)
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{"token": token})
+	json.NewEncoder(w).Encode(*tokens)
 }
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
@@ -87,14 +88,45 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := jwt.GenerateToken(user.Username)
+	tokens, err := jwt.GenerateTokenPair(user.Username, user.Email)
 	if err != nil {
 		logger.Sugar.Errorw("error creating token", "error", err)
 		http.Error(w, "Token generation failed", http.StatusInternalServerError)
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{"token": token})
+	json.NewEncoder(w).Encode(*tokens)
+}
+
+func RefreshTokenHandler(w http.ResponseWriter, r *http.Request) {
+	token, err := utils.GetAuthToken(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	claims, err := jwt.ValidateToken(token, jwt.RefreshToken)
+	if err != nil {
+		logger.Sugar.Error(err.Error())
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	user, err := database.FindUserByUsername(claims.Username)
+	if err != nil {
+		logger.Sugar.Error(err.Error())
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	tokens, err := jwt.GenerateTokenPair(user.Username, user.Email)
+	if err != nil {
+		logger.Sugar.Errorw("error creating token", "error", err)
+		http.Error(w, "Token generation failed", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(*tokens)
 }
 
 func GetProfileHandler(w http.ResponseWriter, r *http.Request) {
@@ -104,7 +136,7 @@ func GetProfileHandler(w http.ResponseWriter, r *http.Request) {
 		ID        string `json:"id"`
 		Username  string `json:"username"`
 		Email     string `json:"email"`
-		RootDirID string `json:"root_dir"`
+		RootDirID string `json:"root_asset"`
 	}{
 		ID:        user.ID,
 		Username:  user.Username,

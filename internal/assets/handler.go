@@ -17,12 +17,12 @@ import (
 	"github.com/js-codegamer/fs-sync/pkg/validator"
 )
 
-func NewAssetHandler(w http.ResponseWriter, r *http.Request) {
+func CreateHandler(w http.ResponseWriter, r *http.Request) {
 	var request struct {
-		Name     string `json:"name" validate:"required"`
-		ParentID string `json:"parent_id" validate:"required,uuid4"`
-		Size     int64  `json:"size"`
-		IsDir    bool   `json:"is_dir"`
+		Name     string           `json:"name" validate:"required"`
+		ParentID string           `json:"parent_id" validate:"required,uuid4"`
+		Size     int64            `json:"size"`
+		Type     models.AssetType `json:"type"`
 	}
 	user := r.Context().Value("user").(models.User)
 
@@ -39,11 +39,11 @@ func NewAssetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if request.Name[len(request.Name)-1] == '/' {
-		request.IsDir = true
+		request.Type = models.FolderType
 		request.Name = strings.TrimPrefix(request.Name, "/")
 	}
 
-	if !request.IsDir && request.Size == 0 {
+	if request.Type != models.FolderType && request.Size == 0 {
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
@@ -52,15 +52,15 @@ func NewAssetHandler(w http.ResponseWriter, r *http.Request) {
 		request.ParentID = user.RootDirID
 	}
 
-	if !request.IsDir && request.Size > config.GetConfig().Storage.MaxFileSizeBytes {
-		http.Error(w, "File size too big", http.StatusBadRequest)
+	if request.Type != models.FolderType && request.Size > config.GetConfig().Storage.MaxFileSizeBytes {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
 
 	parent, err := database.FindAssetByID(request.ParentID)
-	if err != nil || !parent.IsDir {
+	if err != nil || request.Type != models.FolderType {
 		fmt.Println(err)
-		http.Error(w, "Parent does not exist", http.StatusConflict)
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
 
@@ -68,11 +68,11 @@ func NewAssetHandler(w http.ResponseWriter, r *http.Request) {
 		OwnerID:  user.ID,
 		Name:     request.Name,
 		ParentID: parent.ID,
-		IsDir:    request.IsDir,
+		Type:     request.Type,
 		Path:     filepath.Join(parent.Path, request.Name),
 	}
 
-	if !asset.IsDir {
+	if asset.Type == models.FileType {
 		file := models.File{
 			Size:    request.Size,
 			Version: 1,
@@ -81,18 +81,18 @@ func NewAssetHandler(w http.ResponseWriter, r *http.Request) {
 		err = database.CreateFileWithAsset(&file, &asset)
 		if err != nil {
 			logger.Sugar.Errorw("error creating new asset", "error", err)
-			http.Error(w, "Error creating file", http.StatusBadRequest)
+			http.Error(w, "Invalid request payload", http.StatusBadRequest)
 			return
 		}
 		json.NewEncoder(w).Encode(map[string]string{
 			"message":    "success",
-			"upload_url": fmt.Sprintf("/asset/%s", asset.ID),
+			"upload_url": fmt.Sprintf("/a/%s", asset.ID),
 		})
 	} else {
 		err = database.CreateAsset(&asset, nil)
 		if err != nil {
 			logger.Sugar.Errorw("error creating new asset", "error", err)
-			http.Error(w, "Error creating user", http.StatusBadRequest)
+			http.Error(w, "Invalid request payload", http.StatusBadRequest)
 			return
 		}
 
@@ -103,9 +103,39 @@ func NewAssetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func MetadataUpdateHandler(w http.ResponseWriter, r *http.Request) {
+func ReadHandler(w http.ResponseWriter, r *http.Request) {
+	asset := r.Context().Value("asset").(models.Asset)
+
+	var response models.PublicAsset = models.ToPublicAsset(&asset)
+
+	if asset.Type == models.FileType {
+		files, err := database.FindAllFilesByAssetID(asset.ID)
+		if err != nil {
+			logger.Sugar.Errorw("error getting versions", "error", err)
+			http.Error(w, "error getting versions", http.StatusInternalServerError)
+			return
+		}
+		response.Files = files
+	} else if asset.Type == models.FolderType {
+		contents, err := database.GetDirContents(asset)
+		if err != nil {
+			logger.Sugar.Errorw("error getting directory contents", "error", err)
+			http.Error(w, "error getting directory listing", http.StatusInternalServerError)
+			return
+		}
+		response.Children = make([]models.PublicAsset, 0)
+		for _, content := range contents {
+			response.Children = append(response.Children, models.ToPublicAsset(&content))
+		}
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+func UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	var request struct {
-		Size int64 `json:"size"`
+		Name string `json:"name"`
+		Size int64  `json:"size"`
 	}
 	asset := r.Context().Value("asset").(models.Asset)
 	file := r.Context().Value("file").(models.File)
@@ -115,20 +145,40 @@ func MetadataUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// validate request
-	err := validator.GetValidator().Struct(request)
-	if err != nil || request.Size == 0 {
-		http.Error(w, "Invalid request payload", http.StatusBadRequest)
-		return
-	}
-
-	if asset.IsDir {
-		http.Error(w, "Invalid resource update requested", http.StatusBadRequest)
+	var newPath string
+	if asset.Type == models.FolderType {
+		if request.Name != "" {
+			newPath = filepath.Join(filepath.Dir(asset.Path), request.Name)
+			os.Rename(asset.Path, newPath)
+			asset.Path = newPath
+			asset.Name = request.Name
+			database.UpdateAsset(&asset, nil)
+		}
+		json.NewEncoder(w).Encode(map[string]string{
+			"message": "success",
+		})
 		return
 	}
 
 	if file.Path == "" {
 		http.Error(w, "File not uploaded", http.StatusBadRequest)
+		return
+	}
+
+	if request.Name != "" {
+		newPath = filepath.Join(filepath.Dir(asset.Path), request.Name)
+		os.Rename(asset.Path, newPath)
+		asset.Path = newPath
+		asset.Name = request.Name
+		database.UpdateAsset(&asset, nil)
+		file.Path = asset.Path
+		database.UpdateFile(&file, nil)
+	}
+
+	if request.Size == 0 {
+		json.NewEncoder(w).Encode(map[string]string{
+			"message": "success",
+		})
 		return
 	}
 
@@ -147,7 +197,7 @@ func MetadataUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		Version: file.Version + 1,
 		AssetID: asset.ID,
 	}
-	err = database.CreateFile(&newFile, nil)
+	err := database.CreateFile(&newFile, nil)
 	if err != nil {
 		logger.Sugar.Errorw("error creating file db object", "error", err)
 		http.Error(w, "Error creating new version", http.StatusBadRequest)
@@ -155,7 +205,7 @@ func MetadataUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode(map[string]string{
 		"message":    "success",
-		"upload_url": fmt.Sprintf("/upload/%s", newFile.AssetID),
+		"upload_url": fmt.Sprintf("/a/%s", newFile.AssetID),
 	})
 }
 
@@ -236,7 +286,7 @@ func DownloadHandler(w http.ResponseWriter, r *http.Request) {
 func DeleteHandler(w http.ResponseWriter, r *http.Request) {
 	asset := r.Context().Value("asset").(models.Asset)
 
-	if asset.IsDir {
+	if asset.Type == models.FileType {
 		if err := os.RemoveAll(asset.Path); err != nil && !os.IsNotExist(err) {
 			logger.Sugar.Errorw("error removing dir", "error", err)
 			http.Error(w, "Error deleting resource", http.StatusInternalServerError)
@@ -266,17 +316,4 @@ func DeleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	json.NewEncoder(w).Encode(map[string]string{"message": "success"})
-}
-
-func ListingHandler(w http.ResponseWriter, r *http.Request) {
-	dir := r.Context().Value("asset").(models.Asset)
-
-	contents, err := database.GetDirContents(dir)
-	if err != nil {
-		logger.Sugar.Errorw("error getting directory contents", "error", err)
-		http.Error(w, "error getting directory listing", http.StatusInternalServerError)
-		return
-	}
-
-	json.NewEncoder(w).Encode(contents)
 }

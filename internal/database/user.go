@@ -51,7 +51,7 @@ func CreateUser(user models.User, txn *sql.Tx) (models.User, error) {
 		Name:     user.Username,
 		Path:     utils.GetRootDir(user),
 		ParentID: "-1",
-		IsDir:    true,
+		Type:     models.FolderType,
 	}
 	err = CreateAsset(&root_dir, txn)
 	if err != nil {

@@ -77,6 +77,7 @@ data=$(curl ${base_url}/ping -Ls)
 echo $data
 # ---
 
+base_url="$base_url/api/v1"
 # SIGNUP
 sqlite3 data-testing/tests.db "DELETE FROM users WHERE username = '$name';"
 if [ -d "data-testing/$name" ]; then

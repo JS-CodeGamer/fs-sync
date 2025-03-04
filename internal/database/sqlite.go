@@ -66,12 +66,13 @@ func createTables(db *sql.DB) {
             name TEXT NOT NULL,
             parent TEXT NOT NULL,
             is_public BOOLEAN DEFAULT 0,
-            is_dir BOOLEAN NOT NULL,
+            type TEXT NOT NULL,
             path TEXT NOT NULL,
             created_at DATETIME DEFAULT (strftime('%FT%TZ', 'now')),
             updated_at DATETIME DEFAULT (strftime('%FT%TZ', 'now')),
             FOREIGN KEY(owner) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY(parent) REFERENCES assets(id) ON DELETE CASCADE
+            FOREIGN KEY(parent) REFERENCES assets(id) ON DELETE CASCADE,
+            CHECK(type IN ('folder', 'file'))
         )`,
 		`CREATE TABLE IF NOT EXISTS files (
             id TEXT PRIMARY KEY,
